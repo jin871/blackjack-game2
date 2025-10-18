@@ -244,22 +244,27 @@ io.on('connection', (socket) => {
         }
         updateGameState(roomId);
 
-        // 最終ラウンドかどうかを先にチェック
         if (room.round >= MAX_ROUNDS) {
-            // 最終ラウンドなら、短いポーズの後にすぐにランキング表示
             io.to(roomId).emit('notification', { message: '最終結果を集計しています...'});
             setTimeout(() => {
-                const fullRanking = Object.keys(room.players).map(id => ({
-                    id: id, name: room.players[id].name, chips: room.players[id].chips
+                // タイムアウト時にルームが存在するか再度チェック
+                if (!rooms[roomId]) return;
+
+                const fullRanking = Object.keys(rooms[roomId].players).map(id => ({
+                    id: id, name: rooms[roomId].players[id].name, chips: rooms[roomId].players[id].chips
                 })).sort((a, b) => b.chips - a.chips);
+
                 const top5Ranking = fullRanking.slice(0, 5);
                 const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+
                 if (socketsInRoom) {
                     socketsInRoom.forEach(socketId => {
                         const targetSocket = io.sockets.sockets.get(socketId);
-                        if (targetSocket) {
-                            const myRankIndex = fullRanking.findIndex(p => p.id === socketId);
-                            const myData = fullRanking[myRankIndex];
+                        const myRankIndex = fullRanking.findIndex(p => p.id === socketId);
+                        const myData = fullRanking[myRankIndex];
+
+                        // myDataが存在する場合のみ送信（接続切れ対策）
+                        if (targetSocket && myData) {
                             const payload = {
                                 top5: top5Ranking,
                                 personal: { rank: myRankIndex + 1, chips: myData.chips }
@@ -268,10 +273,10 @@ io.on('connection', (socket) => {
                         }
                     });
                 }
+                // 処理が完了したらルームを削除
                 delete rooms[roomId];
-            }, 2000); // 2秒待ってから表示
+            }, 2000);
         } else {
-            // 最終ラウンドでなければ、次のラウンドへのカウントダウンを開始
             let countdown = RESULT_TIME;
             room.timers.countdownTimer = setInterval(() => {
                 io.to(roomId).emit('nextRoundCountdown', { seconds: countdown });
