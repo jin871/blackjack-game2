@@ -117,7 +117,8 @@ io.on('connection', (socket) => {
         if (roomId && rooms[roomId] && rooms[roomId].players[socket.id]) {
             delete rooms[roomId].players[socket.id];
             if (Object.keys(rooms[roomId].players).length === 0) {
-                clearAllTimers(roomId); delete rooms[roomId];
+                clearAllTimers(roomId);
+                delete rooms[roomId];
             } else {
                 updateGameState(roomId);
                 checkAndEndActionPhase(roomId);
@@ -214,7 +215,7 @@ io.on('connection', (socket) => {
         }, 1500);
     }
     
-    // UPDATED: この関数を修正しました
+    // UPDATED: この関数を大幅に修正
     function determineWinner(roomId) {
         const room = rooms[roomId]; if (!room) return;
         room.gameState = 'result'; const dealerScore = room.dealer.score;
@@ -246,16 +247,18 @@ io.on('connection', (socket) => {
 
         if (room.round >= MAX_ROUNDS) {
             io.to(roomId).emit('notification', { message: '最終結果を集計しています...'});
+            
+            // データを先にコピーし、すぐにルームを削除する
+            const finalPlayers = JSON.parse(JSON.stringify(room.players));
+            const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+            delete rooms[roomId];
+
             setTimeout(() => {
-                // タイムアウト時にルームが存在するか再度チェック
-                if (!rooms[roomId]) return;
-
-                const fullRanking = Object.keys(rooms[roomId].players).map(id => ({
-                    id: id, name: rooms[roomId].players[id].name, chips: rooms[roomId].players[id].chips
+                const fullRanking = Object.keys(finalPlayers).map(id => ({
+                    id: id, name: finalPlayers[id].name, chips: finalPlayers[id].chips
                 })).sort((a, b) => b.chips - a.chips);
-
+                
                 const top5Ranking = fullRanking.slice(0, 5);
-                const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
 
                 if (socketsInRoom) {
                     socketsInRoom.forEach(socketId => {
@@ -263,7 +266,6 @@ io.on('connection', (socket) => {
                         const myRankIndex = fullRanking.findIndex(p => p.id === socketId);
                         const myData = fullRanking[myRankIndex];
 
-                        // myDataが存在する場合のみ送信（接続切れ対策）
                         if (targetSocket && myData) {
                             const payload = {
                                 top5: top5Ranking,
@@ -273,18 +275,18 @@ io.on('connection', (socket) => {
                         }
                     });
                 }
-                // 処理が完了したらルームを削除
-                delete rooms[roomId];
             }, 2000);
         } else {
             let countdown = RESULT_TIME;
             room.timers.countdownTimer = setInterval(() => {
-                io.to(roomId).emit('nextRoundCountdown', { seconds: countdown });
-                countdown--;
-                if (countdown < 0) {
-                    clearInterval(room.timers.countdownTimer);
-                    room.round++;
-                    startRound(roomId);
+                if (rooms[roomId]) { // 次のラウンドに進む前にルームが存在するか確認
+                    io.to(roomId).emit('nextRoundCountdown', { seconds: countdown });
+                    countdown--;
+                    if (countdown < 0) {
+                        clearInterval(room.timers.countdownTimer);
+                        room.round++;
+                        startRound(roomId);
+                    }
                 }
             }, 1000);
         }
