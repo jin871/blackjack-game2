@@ -190,7 +190,7 @@
             display: flex;
             justify-content: space-between;
             font-weight: 700;
-            font-size: 1.0em;
+            font-size: 1.1em;
             text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
         }
 
@@ -333,22 +333,18 @@
             font-weight: bold;
         }
 
-        /* NEW: ランキングで自分をハイライトするスタイル */
-        .ranking-modal li.my-rank-highlight {
-            background-color: #FFD700;
-            color: #1a472a;
-            border: 2px solid white;
-        }
-
-        #my-rank-display {
-            margin-top: 20px;
-            font-size: 1.3em;
-            font-weight: bold;
-        }
-
         #closeRankingBtn {
             margin-top: 20px;
             background-color: #008c9e;
+        }
+
+        #personal-rank-display {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.3);
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #f0e68c;
         }
     </style>
 </head>
@@ -363,15 +359,17 @@
                 <button id="createRoomBtn">新しいルームを作成</button>
                 <button id="joinRoomBtn">ルームに参加</button>
             </div>
-            <p class="footer-text">udemyの動画を見て作りました!</p>
+            <p class="footer-text">udemyで作りました！</p>
         </div>
 
         <div id="game-room" class="game-container" style="display: none;">
             <header class="game-header">
                 <div id="roomInfo"></div>
-                <a href="https://www.udemy.com/" target="_blank" rel="noopener noreferrer" class="header-link">サイトはこちらから
-                    →<img src="https://boxil-public.s3.ap-northeast-1.amazonaws.com/kg8etn5eriw83tzyotl0cvzy2v49"
-                        class="udemy-logo-svg" alt="ロゴ"></a>
+                <a href="#" target="_blank" rel="noopener noreferrer" class="header-link">
+                    サイトはこちらから →
+                    <img src="https://boxil-public.s3.ap-northeast-1.amazonaws.com/kg8etn5eriw83tzyotl0cvzy2v49"
+                        class="udemy-logo-svg" alt="ロゴ">
+                </a>
             </header>
             <div id="notificationBar"></div>
             <main class="game-board">
@@ -402,13 +400,12 @@
             </main>
             <p class="footer-text">udemyで作りました！</p>
         </div>
-
         <div id="ranking-modal-overlay" class="modal-overlay" style="display: none;">
             <div class="ranking-modal">
-                <h2>最終結果</h2>
+                <h2>最終結果 TOP 5</h2>
                 <ol id="ranking-list"></ol>
-                <p id="my-rank-display" style="display: none;"></p>
-                <button id="closeRankingBtn">ロビーに戻る</button>
+                <p id="personal-rank-display" style="display: none;"></p>
+                <button id="closeRankingBtn">ゲームを続ける</button>
             </div>
         </div>
     </div>
@@ -447,56 +444,60 @@
         const rankingModalOverlay = document.getElementById('ranking-modal-overlay');
         const rankingList = document.getElementById('ranking-list');
         const closeRankingBtn = document.getElementById('closeRankingBtn');
+        const personalRankDisplay = document.getElementById('personal-rank-display');
 
         createRoomBtn.addEventListener('click', () => { const p = playerNameInput.value.trim(); const r = roomIdInput.value.trim(); if (p && r) socket.emit('createRoom', { roomId: r, playerName: p }); else alert('名前とルームIDを入力してください。'); });
         joinRoomBtn.addEventListener('click', () => { const p = playerNameInput.value.trim(); const r = roomIdInput.value.trim(); if (p && r) socket.emit('joinRoom', { roomId: r, playerName: p }); else alert('名前とルームIDを入力してください。'); });
-        startGameBtn.addEventListener('click', () => socket.emit('requestStartGame'));
+        startGameBtn.addEventListener('click', () => socket.emit('requestStartGame', currentRoomId));
         function placeBet() { const amount = betAmountInput.value; socket.emit('placeBet', { roomId: currentRoomId, amount }); bettingControls.style.display = 'none'; }
         betBtn.addEventListener('click', placeBet);
         betAmountInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') placeBet(); });
         hitBtn.addEventListener('click', () => socket.emit('hit', currentRoomId));
         standBtn.addEventListener('click', () => socket.emit('stand', currentRoomId));
-        closeRankingBtn.addEventListener('click', () => window.location.reload());
+        closeRankingBtn.addEventListener('click', () => { rankingModalOverlay.style.display = 'none'; });
 
         socket.on('roomJoined', (data) => { currentRoomId = data.roomId; lobby.style.display = 'none'; gameRoom.style.display = 'flex'; });
         socket.on('errorMsg', (m) => alert(m));
-
-        socket.on('betCountdown', (data) => { notificationBar.textContent = `ベット時間... 残り${data.seconds}秒`; });
-        socket.on('actionCountdown', (data) => { notificationBar.textContent = `アクションタイム... 残り${data.seconds}秒`; });
+        socket.on('nextRoundCountdown', (data) => { notificationBar.textContent = `次のラウンドまで ${data.seconds}秒...`; });
 
         // UPDATED: このイベントハンドラを修正
         socket.on('finalRanking', (data) => {
-            const top5 = data.top5;
-            const myRank = data.myRank;
+            // データが不正な場合は、エラーを防ぐために処理を中断する
+            if (!data || !data.top5 || !data.personal) {
+                console.error('受信したランキングデータが不正です:', data);
+                return;
+            }
 
-            rankingList.innerHTML = ''; // 前の結果をクリア
-            top5.forEach((player) => {
+            rankingList.innerHTML = '';
+            personalRankDisplay.style.display = 'none';
+
+            data.top5.forEach((player, index) => {
+                const rank = index + 1;
                 const li = document.createElement('li');
-                li.innerHTML = `<span>${player.rank}位: ${player.name}</span><span>💰 ${player.chips}</span>`;
-                // 自分がトップ5にいる場合、自分の順位をハイライト
-                if (player.rank === myRank.rank) {
-                    li.classList.add('my-rank-highlight');
-                }
+                li.innerHTML = `<span>${rank}位: ${player.name}</span><span>💰 ${player.chips}</span>`;
                 rankingList.appendChild(li);
             });
 
-            // 自分がトップ5に入っていない場合、自分の順位を別途表示
-            const myRankDisplay = document.getElementById('my-rank-display');
-            if (myRank.rank > 5) {
-                myRankDisplay.textContent = `あなたの順位: ${myRank.rank}位 (💰 ${myRank.chips})`;
-                myRankDisplay.style.display = 'block';
-            } else {
-                myRankDisplay.style.display = 'none';
+            if (data.personal.rank > 5) {
+                personalRankDisplay.textContent = `あなたの順位: ${data.personal.rank}位 (💰 ${data.personal.chips})`;
+                personalRankDisplay.style.display = 'block';
             }
 
             rankingModalOverlay.style.display = 'flex';
         });
 
+        socket.on('betCountdown', (data) => {
+            notificationBar.textContent = `ベット時間... 残り${data.seconds}秒`;
+        });
+        socket.on('actionCountdown', (data) => {
+            notificationBar.textContent = `アクションタイム... 残り${data.seconds}秒`;
+        });
         socket.on('gameStateUpdate', (state) => {
             const playerCount = Object.keys(state.players).length;
             roomInfo.textContent = `ルームID: ${currentRoomId} | ラウンド ${state.round}/5 | 参加人数: ${playerCount}人`;
-            if (state.gameState === 'result') { notificationBar.textContent = '結果発表...'; }
-
+            if (state.gameState === 'result') {
+                notificationBar.textContent = '結果発表...';
+            }
             renderCards(dealerCards, state.dealer.hand);
             dealerScore.textContent = state.dealer.score;
             const self = state.players[socket.id];
@@ -520,7 +521,7 @@
                     cardDiv.classList.add('hidden');
                 } else {
                     const color = (card.suit === '♥' || card.suit === '♦') ? 'red' : 'black';
-                    cardDiv.classList.add(color);
+                    cardDiv.classList.add('color');
                     const valueSpan = document.createElement('span');
                     valueSpan.textContent = card.value || '';
                     const suitSpan = document.createElement('span');
@@ -552,9 +553,6 @@
                 }
             }
         }
-        socket.on('nextRoundCountdown', (data) => {
-            notificationBar.textContent = `次のラウンドまで ${data.seconds}秒...`;
-        });
     </script>
 </body>
 
