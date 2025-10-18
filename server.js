@@ -1,10 +1,21 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
+const cors = require('cors'); // Import the cors package
 
 const app = express();
+app.use(cors()); // Use cors middleware for Express
+
 const server = http.createServer(app);
-const io = socketIo(server);
+
+// UPDATED: Configure Socket.IO to allow cross-origin requests
+const io = socketIo(server, {
+  cors: {
+    origin: "*", // Allows connections from any address
+    methods: ["GET", "POST"]
+  }
+});
+
 
 app.use(express.static('public'));
 
@@ -14,6 +25,7 @@ const BET_TIME = 20;
 const TURN_TIME = 20;
 const RESULT_TIME = 8;
 const DEALER_WAIT_TIME = 2000;
+const ROOM_INACTIVITY_TIMEOUT = 15 * 60 * 1000; 
 
 function getRoomIdFromSocket(socket) {
     let roomId = null;
@@ -21,6 +33,12 @@ function getRoomIdFromSocket(socket) {
         if (r !== socket.id) { roomId = r; break; }
     }
     return roomId;
+}
+
+function updateRoomActivity(roomId) {
+    if (rooms[roomId]) {
+        rooms[roomId].lastActivity = Date.now();
+    }
 }
 
 io.on('connection', (socket) => {
@@ -47,7 +65,14 @@ io.on('connection', (socket) => {
         const { roomId, playerName } = data;
         if (rooms[roomId]) { socket.emit('errorMsg', 'そのルームIDは既に使用されています。'); return; }
         socket.join(roomId);
-        rooms[roomId] = { players: { [socket.id]: createPlayer(playerName) }, gameState: 'waiting', round: 0, dealer: { hand: [], score: 0 }, timers: {} };
+        rooms[roomId] = { 
+            players: { [socket.id]: createPlayer(playerName) }, 
+            gameState: 'waiting', 
+            round: 0, 
+            dealer: { hand: [], score: 0 }, 
+            timers: {},
+            lastActivity: Date.now()
+        };
         socket.emit('roomJoined', { roomId });
         updateGameState(roomId);
     });
@@ -58,13 +83,12 @@ io.on('connection', (socket) => {
         if (Object.keys(rooms[roomId].players).length >= 5) { socket.emit('errorMsg', 'このルームは満員です。'); return; }
         socket.join(roomId);
         rooms[roomId].players[socket.id] = createPlayer(playerName);
+        updateRoomActivity(roomId);
         socket.emit('roomJoined', { roomId });
         updateGameState(roomId);
     });
     
-    socket.on('requestStartGame', () => {
-        const roomId = getRoomIdFromSocket(socket);
-        if (!roomId) { return; }
+    socket.on('requestStartGame', (roomId) => {
         const room = rooms[roomId];
         if (room && room.gameState === 'waiting' && Object.keys(room.players).length >= 1) {
             startGame(roomId);
@@ -81,6 +105,7 @@ io.on('connection', (socket) => {
         if (betAmount > 0) {
             player.bet = betAmount;
             player.status = 'betted';
+            updateRoomActivity(roomId);
             const allPlayersBetted = Object.values(room.players).every(p => p.status === 'betted' || p.isEliminated);
             if (allPlayersBetted) {
                 clearTimeout(room.timers.betTimeout);
@@ -99,6 +124,7 @@ io.on('connection', (socket) => {
         player.hand.push(dealCard(room.deck));
         player.score = calculateScore(player.hand);
         if (player.score > 21) { player.status = 'bust'; }
+        updateRoomActivity(roomId);
         updateGameState(roomId);
         checkAndEndActionPhase(roomId);
     });
@@ -108,6 +134,7 @@ io.on('connection', (socket) => {
         const player = room.players[socket.id];
         if (room.gameState !== 'actionPhase' || player.status !== 'playing') { return; }
         player.status = 'stand';
+        updateRoomActivity(roomId);
         updateGameState(roomId);
         checkAndEndActionPhase(roomId);
     });
@@ -117,8 +144,10 @@ io.on('connection', (socket) => {
         if (roomId && rooms[roomId] && rooms[roomId].players[socket.id]) {
             delete rooms[roomId].players[socket.id];
             if (Object.keys(rooms[roomId].players).length === 0) {
-                clearAllTimers(roomId); delete rooms[roomId];
+                clearAllTimers(roomId);
+                delete rooms[roomId];
             } else {
+                updateRoomActivity(roomId);
                 updateGameState(roomId);
                 checkAndEndActionPhase(roomId);
             }
@@ -129,7 +158,13 @@ io.on('connection', (socket) => {
         return { name: playerName, chips: 1000, bet: 0, hand: [], score: 0, status: 'waiting', isEliminated: false };
     }
 
-    function startGame(roomId) { const room = rooms[roomId]; room.round = 1; startRound(roomId); }
+    function startGame(roomId) { 
+        const room = rooms[roomId]; 
+        if (!room) return;
+        room.round = 1; 
+        updateRoomActivity(roomId);
+        startRound(roomId); 
+    }
 
     function startRound(roomId) {
         const room = rooms[roomId]; if (!room) return;
@@ -214,7 +249,6 @@ io.on('connection', (socket) => {
         }, 1500);
     }
     
-    // UPDATED: この関数を修正しました
     function determineWinner(roomId) {
         const room = rooms[roomId]; if (!room) return;
         room.gameState = 'result'; const dealerScore = room.dealer.score;
@@ -244,42 +278,54 @@ io.on('connection', (socket) => {
         }
         updateGameState(roomId);
 
-        // 最終ラウンドかどうかを先にチェック
         if (room.round >= MAX_ROUNDS) {
-            // 最終ラウンドなら、短いポーズの後にすぐにランキング表示
             io.to(roomId).emit('notification', { message: '最終結果を集計しています...'});
+            
             setTimeout(() => {
-                const fullRanking = Object.keys(room.players).map(id => ({
-                    id: id, name: room.players[id].name, chips: room.players[id].chips
-                })).sort((a, b) => b.chips - a.chips);
-                const top5Ranking = fullRanking.slice(0, 5);
-                const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
-                if (socketsInRoom) {
-                    socketsInRoom.forEach(socketId => {
-                        const targetSocket = io.sockets.sockets.get(socketId);
-                        if (targetSocket) {
+                try {
+                    if (!rooms[roomId]) return;
+                    const finalPlayers = rooms[roomId].players;
+                    const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+
+                    const fullRanking = Object.keys(finalPlayers).map(id => ({
+                        id: id, name: finalPlayers[id].name, chips: finalPlayers[id].chips
+                    })).sort((a, b) => b.chips - a.chips);
+                    
+                    const top5Ranking = fullRanking.slice(0, 5);
+
+                    if (socketsInRoom) {
+                        socketsInRoom.forEach(socketId => {
+                            const targetSocket = io.sockets.sockets.get(socketId);
                             const myRankIndex = fullRanking.findIndex(p => p.id === socketId);
                             const myData = fullRanking[myRankIndex];
-                            const payload = {
-                                top5: top5Ranking,
-                                personal: { rank: myRankIndex + 1, chips: myData.chips }
-                            };
-                            targetSocket.emit('finalRanking', payload);
-                        }
-                    });
+
+                            if (targetSocket && myData) {
+                                const payload = {
+                                    top5: top5Ranking,
+                                    personal: { rank: myRankIndex + 1, chips: myData.chips }
+                                };
+                                targetSocket.emit('finalRanking', payload);
+                            }
+                        });
+                    }
+                } finally {
+                    if (rooms[roomId]) {
+                        console.log(`[Game Finished] Deleting room ${roomId}.`);
+                        delete rooms[roomId];
+                    }
                 }
-                delete rooms[roomId];
-            }, 2000); // 2秒待ってから表示
+            }, 4000);
         } else {
-            // 最終ラウンドでなければ、次のラウンドへのカウントダウンを開始
             let countdown = RESULT_TIME;
             room.timers.countdownTimer = setInterval(() => {
-                io.to(roomId).emit('nextRoundCountdown', { seconds: countdown });
-                countdown--;
-                if (countdown < 0) {
-                    clearInterval(room.timers.countdownTimer);
-                    room.round++;
-                    startRound(roomId);
+                if (rooms[roomId]) {
+                    io.to(roomId).emit('nextRoundCountdown', { seconds: countdown });
+                    countdown--;
+                    if (countdown < 0) {
+                        clearInterval(room.timers.countdownTimer);
+                        room.round++;
+                        startRound(roomId);
+                    }
                 }
             }, 1000);
         }
@@ -287,6 +333,7 @@ io.on('connection', (socket) => {
 
     function updateGameState(roomId) {
         const room = rooms[roomId]; if (!room) return;
+        updateRoomActivity(roomId);
         const hideDealerCard = room.gameState === 'actionPhase';
         const stateForClient = { players: room.players, gameState: room.gameState, round: room.round, dealer: { hand: (hideDealerCard) ? [room.dealer.hand[0], { suit: 'hidden', value: ' ' }] : room.dealer.hand, score: (hideDealerCard) ? calculateScore([room.dealer.hand[0]]) : room.dealer.score }};
         io.to(roomId).emit('gameStateUpdate', stateForClient);
@@ -296,5 +343,16 @@ io.on('connection', (socket) => {
 function createDeck() { const suits = ['♥', '♦', '♣', '♠']; const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']; let deck = []; for (const suit of suits) { for (const value of values) { deck.push({ suit, value }); } } return deck.sort(() => Math.random() - 0.5); }
 function dealCard(deck) { return deck.pop(); }
 function calculateScore(hand) { let score = 0; let aceCount = 0; for (const card of hand) { if (card.value === 'A') { aceCount++; score += 11; } else if (['J', 'Q', 'K'].includes(card.value)) { score += 10; } else { score += parseInt(card.value); }} while (score > 21 && aceCount > 0) { score -= 10; aceCount--; } return score; }
+
+setInterval(() => {
+    const now = Date.now();
+    for (const roomId in rooms) {
+        if (now - rooms[roomId].lastActivity > ROOM_INACTIVITY_TIMEOUT) {
+            console.log(`[Garbage Collector] Deleting inactive room ${roomId}.`);
+            delete rooms[roomId];
+        }
+    }
+}, 60 * 1000);
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
