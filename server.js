@@ -1,21 +1,10 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const cors = require('cors'); // Import the cors package
 
 const app = express();
-app.use(cors()); // Use cors middleware for Express
-
 const server = http.createServer(app);
-
-// UPDATED: Configure Socket.IO to allow cross-origin requests
-const io = socketIo(server, {
-  cors: {
-    origin: "*", // Allows connections from any address
-    methods: ["GET", "POST"]
-  }
-});
-
+const io = socketIo(server);
 
 app.use(express.static('public'));
 
@@ -61,12 +50,14 @@ io.on('connection', (socket) => {
         }
     }
 
+    // UPDATED: ルーム作成時に hostId を保存
     socket.on('createRoom', (data) => {
         const { roomId, playerName } = data;
         if (rooms[roomId]) { socket.emit('errorMsg', 'そのルームIDは既に使用されています。'); return; }
         socket.join(roomId);
         rooms[roomId] = { 
             players: { [socket.id]: createPlayer(playerName) }, 
+            hostId: socket.id, // ★ ホストのIDを保存
             gameState: 'waiting', 
             round: 0, 
             dealer: { hand: [], score: 0 }, 
@@ -80,7 +71,7 @@ io.on('connection', (socket) => {
     socket.on('joinRoom', (data) => {
         const { roomId, playerName } = data;
         if (!rooms[roomId]) { socket.emit('errorMsg', 'そのルームIDは存在しません。'); return; }
-        if (Object.keys(rooms[roomId].players).length >= 5) { socket.emit('errorMsg', 'このルームは満員です。'); return; }
+        
         socket.join(roomId);
         rooms[roomId].players[socket.id] = createPlayer(playerName);
         updateRoomActivity(roomId);
@@ -88,8 +79,14 @@ io.on('connection', (socket) => {
         updateGameState(roomId);
     });
     
+    // UPDATED: ゲーム開始リクエストにホスト検証を追加
     socket.on('requestStartGame', (roomId) => {
         const room = rooms[roomId];
+        // ★ ホストかどうかを検証
+        if (room.hostId !== socket.id) {
+            socket.emit('errorMsg', 'ホストのみがゲームを開始できます。');
+            return;
+        }
         if (room && room.gameState === 'waiting' && Object.keys(room.players).length >= 1) {
             startGame(roomId);
         }
@@ -139,14 +136,28 @@ io.on('connection', (socket) => {
         checkAndEndActionPhase(roomId);
     });
 
+    // UPDATED: 接続切れの際にホストの移譲処理を追加
     socket.on('disconnect', () => {
         const roomId = getRoomIdFromSocket(socket);
         if (roomId && rooms[roomId] && rooms[roomId].players[socket.id]) {
+            const playerWasHost = (rooms[roomId].hostId === socket.id);
             delete rooms[roomId].players[socket.id];
+
             if (Object.keys(rooms[roomId].players).length === 0) {
                 clearAllTimers(roomId);
                 delete rooms[roomId];
             } else {
+                // ★ もし退出したのがホストなら、新しいホストを任命
+                if (playerWasHost) {
+                    const newHostId = Object.keys(rooms[roomId].players)[0]; // 残ったプレイヤーの最初の1人
+                    rooms[roomId].hostId = newHostId;
+                    
+                    // 新しいホストにだけ通知を送る
+                    const newHostSocket = io.sockets.sockets.get(newHostId);
+                    if (newHostSocket) {
+                        newHostSocket.emit('notification', { message: 'ホストが退出したため、あなたが新しいホストになりました。' });
+                    }
+                }
                 updateRoomActivity(roomId);
                 updateGameState(roomId);
                 checkAndEndActionPhase(roomId);
@@ -331,11 +342,21 @@ io.on('connection', (socket) => {
         }
     }
 
+    // UPDATED: hostId をクライアントに送る
     function updateGameState(roomId) {
         const room = rooms[roomId]; if (!room) return;
         updateRoomActivity(roomId);
         const hideDealerCard = room.gameState === 'actionPhase';
-        const stateForClient = { players: room.players, gameState: room.gameState, round: room.round, dealer: { hand: (hideDealerCard) ? [room.dealer.hand[0], { suit: 'hidden', value: ' ' }] : room.dealer.hand, score: (hideDealerCard) ? calculateScore([room.dealer.hand[0]]) : room.dealer.score }};
+        const stateForClient = { 
+            players: room.players, 
+            gameState: room.gameState, 
+            round: room.round, 
+            hostId: room.hostId, // ★ ホストIDをクライアントに送る
+            dealer: { 
+                hand: (hideDealerCard) ? [room.dealer.hand[0], { suit: 'hidden', value: ' ' }] : room.dealer.hand, 
+                score: (hideDealerCard) ? calculateScore([room.dealer.hand[0]]) : room.dealer.score 
+            }
+        };
         io.to(roomId).emit('gameStateUpdate', stateForClient);
     }
     function clearAllTimers(roomId) { const room = rooms[roomId]; if(room && room.timers) { for (const timer in room.timers) { clearInterval(room.timers[timer]); clearTimeout(room.timers[timer]); }}}
