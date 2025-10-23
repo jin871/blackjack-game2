@@ -288,7 +288,7 @@ io.on('connection', (socket) => {
             }
         }
         updateGameState(roomId);
-
+// 結果表示と次のラウンドまたはゲーム終了の処理
         if (room.round >= MAX_ROUNDS) {
             io.to(roomId).emit('notification', { message: '最終結果を集計しています...'});
             
