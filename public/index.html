@@ -73,6 +73,8 @@
             cursor: pointer;
             transition: background-color 0.3s;
             margin: 5px;
+            touch-action: manipulation;
+            /* タップ遅延を削除 */
         }
 
         /* --- Game Styles --- */
@@ -223,6 +225,8 @@
             border: none;
             cursor: pointer;
             transition: all 0.2s ease;
+            touch-action: manipulation;
+            /* タップ遅延を削除 */
         }
 
         .actions-area button:disabled {
@@ -349,6 +353,8 @@
         #closeRankingBtn {
             margin-top: 20px;
             background-color: #008c9e;
+            touch-action: manipulation;
+            /* タップ遅延を削除 */
         }
 
         #personal-rank-display {
@@ -358,22 +364,17 @@
             color: #f0e68c;
         }
 
-        /* UPDATED: フッターの基本スタイルを追加 */
         .footer-text {
             text-align: center;
             padding-top: 10px;
-            /* main要素との間に少し隙間を空ける */
             color: rgba(255, 255, 255, 0.5);
             font-size: 0.9em;
             flex-shrink: 0;
-            /* コンテナが縮んでもフッターは縮まないように */
         }
 
         .lobby-container .footer-text {
             margin-top: 15px;
-            /* ロビーではボタンとの間隔を確保 */
         }
-
 
         /* ---------------------------------- */
         /* --- スマホ対応 (メディアクエリ) --- */
@@ -381,9 +382,7 @@
         @media (max-width: 768px) {
             body {
                 font-size: 14px;
-                /* スマホ用の基本フォントサイズ */
                 overflow: auto;
-                /* 画面が小さい場合はスクロールを許可 */
             }
 
             .lobby-container {
@@ -398,14 +397,11 @@
             .game-container {
                 padding: 10px;
                 height: 100%;
-                /* 高さを自動調整 */
                 min-height: 100vh;
-                /* 最低でも画面の高さは確保 */
             }
 
             .game-header {
                 flex-direction: column;
-                /* ヘッダー要素を縦積み */
                 gap: 5px;
                 margin-bottom: 5px;
                 text-align: center;
@@ -413,7 +409,6 @@
 
             .udemy-logo-svg {
                 height: 30px;
-                /* ロゴを少し小さく */
             }
 
             a.header-link {
@@ -426,7 +421,6 @@
 
             .game-board {
                 gap: 10px;
-                /* 各エリア間の隙間を減らす */
             }
 
             .main-content-area {
@@ -440,16 +434,13 @@
 
             .card {
                 width: 60px;
-                /* カードを小さく */
                 height: 90px;
                 font-size: 1.5em;
-                /* カードの文字サイズ */
                 border-radius: 5px;
             }
 
             .cards-container {
                 min-height: 95px;
-                /* カードの高さに合わせる */
                 gap: 5px;
             }
 
@@ -457,14 +448,12 @@
                 padding: 0;
                 gap: 10px;
                 flex: none;
-                /* 高さを自動に */
             }
 
             .actions-area button,
             .actions-area input[type="number"] {
                 font-size: 1.1em;
                 padding: 12px;
-                /* タップしやすく */
             }
 
             .ranking-modal {
@@ -489,7 +478,6 @@
                 font-size: 1.2em;
             }
 
-            /* UPDATED: スマホではフッターテキストを非表示にする */
             .footer-text {
                 display: none;
             }
@@ -600,16 +588,73 @@
         const closeRankingBtn = document.getElementById('closeRankingBtn');
         const personalRankDisplay = document.getElementById('personal-rank-display');
 
-        createRoomBtn.addEventListener('click', () => { const p = playerNameInput.value.trim(); const r = roomIdInput.value.trim(); if (p && r) socket.emit('createRoom', { roomId: r, playerName: p }); else alert('名前とルームIDを入力してください。'); });
-        joinRoomBtn.addEventListener('click', () => { const p = playerNameInput.value.trim(); const r = roomIdInput.value.trim(); if (p && r) socket.emit('joinRoom', { roomId: r, playerName: p }); else alert('名前とルームIDを入力してください。'); });
-        startGameBtn.addEventListener('click', () => socket.emit('requestStartGame', currentRoomId));
-        function placeBet() { const amount = betAmountInput.value; socket.emit('placeBet', { roomId: currentRoomId, amount }); bettingControls.style.display = 'none'; }
-        betBtn.addEventListener('click', placeBet);
-        betAmountInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') placeBet(); });
-        hitBtn.addEventListener('click', () => socket.emit('hit', currentRoomId));
-        standBtn.addEventListener('click', () => socket.emit('stand', currentRoomId));
+        // UPDATED: 全てのボタンに 'touchend' イベントリスナーを追加
 
-        closeRankingBtn.addEventListener('click', () => { window.location.reload(); });
+        // --- ロビーボタン ---
+        const createRoomHandler = (e) => {
+            e.preventDefault(); // ダブルタップズームとゴーストクリックを防止
+            const p = playerNameInput.value.trim();
+            const r = roomIdInput.value.trim();
+            if (p && r) socket.emit('createRoom', { roomId: r, playerName: p });
+            else alert('名前とルームIDを入力してください。');
+        };
+        createRoomBtn.addEventListener('click', createRoomHandler);
+        createRoomBtn.addEventListener('touchend', createRoomHandler);
+
+        const joinRoomHandler = (e) => {
+            e.preventDefault();
+            const p = playerNameInput.value.trim();
+            const r = roomIdInput.value.trim();
+            if (p && r) socket.emit('joinRoom', { roomId: r, playerName: p });
+            else alert('名前とルームIDを入力してください。');
+        };
+        joinRoomBtn.addEventListener('click', joinRoomHandler);
+        joinRoomBtn.addEventListener('touchend', joinRoomHandler);
+
+        // --- ゲーム開始ボタン ---
+        const startGameHandler = (e) => {
+            e.preventDefault();
+            socket.emit('requestStartGame', currentRoomId);
+        };
+        startGameBtn.addEventListener('click', startGameHandler);
+        startGameBtn.addEventListener('touchend', startGameHandler);
+
+        // --- ベットボタン ---
+        function placeBet(e) {
+            if (e) e.preventDefault();
+            const amount = betAmountInput.value;
+            socket.emit('placeBet', { roomId: currentRoomId, amount });
+            bettingControls.style.display = 'none';
+        }
+        betBtn.addEventListener('click', placeBet);
+        betBtn.addEventListener('touchend', placeBet);
+        betAmountInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') placeBet(); }); // Enterキー操作はPC用に残す
+
+        // --- ヒットボタン ---
+        const hitHandler = (e) => {
+            e.preventDefault();
+            socket.emit('hit', currentRoomId);
+        };
+        hitBtn.addEventListener('click', hitHandler);
+        hitBtn.addEventListener('touchend', hitHandler);
+
+        // --- スタンドボタン ---
+        const standHandler = (e) => {
+            e.preventDefault();
+            socket.emit('stand', currentRoomId);
+        };
+        standBtn.addEventListener('click', standHandler);
+        standBtn.addEventListener('touchend', standHandler);
+
+        // --- ランキングを閉じるボタン ---
+        const closeRankingHandler = (e) => {
+            e.preventDefault();
+            window.location.reload();
+        };
+        closeRankingBtn.addEventListener('click', closeRankingHandler);
+        closeRankingBtn.addEventListener('touchend', closeRankingHandler);
+
+        // --------------------------------------------------
 
         socket.on('roomJoined', (data) => { currentRoomId = data.roomId; lobby.style.display = 'none'; gameRoom.style.display = 'flex'; });
         socket.on('errorMsg', (m) => alert(m));
