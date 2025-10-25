@@ -428,6 +428,16 @@
                 gap: 10px;
             }
 
+            /* UPDATED: 盤面が引き伸ばされるのを防ぎ、コンパクトにする */
+            .player-area.self {
+                flex: none;
+                /* 高さを自動に */
+                justify-content: flex-start;
+                /* 上寄せに */
+                gap: 10px;
+                /* 盤面内の要素の隙間 */
+            }
+
             .player-area {
                 padding: 10px;
             }
@@ -587,8 +597,6 @@
         const rankingList = document.getElementById('ranking-list');
         const closeRankingBtn = document.getElementById('closeRankingBtn');
         const personalRankDisplay = document.getElementById('personal-rank-display');
-
-        // UPDATED: 全てのボタンに 'touchend' イベントリスナーを追加
 
         // --- ロビーボタン ---
         const createRoomHandler = (e) => {
