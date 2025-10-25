@@ -8,6 +8,7 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Roboto:wght@700&display=swap');
 
+        /* --- Base Styles --- */
         html,
         body {
             height: 100%;
@@ -23,6 +24,8 @@
             justify-content: center;
             align-items: center;
             font-size: 16px;
+            -webkit-text-size-adjust: 100%;
+            /* iOSでの自動ズーム防止 */
         }
 
         .container {
@@ -30,6 +33,7 @@
             height: 100%;
         }
 
+        /* --- Lobby Styles --- */
         .lobby-container {
             background-color: #1a472a;
             width: 100%;
@@ -42,6 +46,7 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
+            box-sizing: border-box;
         }
 
         .lobby-container h1 {
@@ -70,6 +75,7 @@
             margin: 5px;
         }
 
+        /* --- Game Styles --- */
         .game-container {
             background-color: rgba(0, 0, 0, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -120,6 +126,7 @@
             min-height: 1.2em;
             flex-shrink: 0;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            text-align: center;
         }
 
         .game-board {
@@ -162,6 +169,8 @@
 
         .cards-container {
             display: flex;
+            flex-wrap: wrap;
+            /* スマホでカードが折り返せるように */
             justify-content: center;
             gap: 10px;
             min-height: 100px;
@@ -250,6 +259,8 @@
             font-size: 2em;
             font-weight: bold;
             box-shadow: 0 5px 10px rgba(0, 0, 0, 0.4);
+            flex-shrink: 0;
+            /* カードが縮まないように */
         }
 
         .card.red {
@@ -287,6 +298,7 @@
             background-color: #f44336;
         }
 
+        /* --- Modal Styles --- */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -308,6 +320,7 @@
             text-align: center;
             min-width: 400px;
             box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+            box-sizing: border-box;
         }
 
         .ranking-modal h2 {
@@ -338,14 +351,148 @@
             background-color: #008c9e;
         }
 
-        /* UPDATED: ランキングモーダルのスタイルを変更 */
         #personal-rank-display {
             margin-bottom: 20px;
-            /* タイトルとの間隔をあける */
             font-size: 1.4em;
-            /* 少し大きくして目立たせる */
             font-weight: bold;
             color: #f0e68c;
+        }
+
+        /* UPDATED: フッターの基本スタイルを追加 */
+        .footer-text {
+            text-align: center;
+            padding-top: 10px;
+            /* main要素との間に少し隙間を空ける */
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.9em;
+            flex-shrink: 0;
+            /* コンテナが縮んでもフッターは縮まないように */
+        }
+
+        .lobby-container .footer-text {
+            margin-top: 15px;
+            /* ロビーではボタンとの間隔を確保 */
+        }
+
+
+        /* ---------------------------------- */
+        /* --- スマホ対応 (メディアクエリ) --- */
+        /* ---------------------------------- */
+        @media (max-width: 768px) {
+            body {
+                font-size: 14px;
+                /* スマホ用の基本フォントサイズ */
+                overflow: auto;
+                /* 画面が小さい場合はスクロールを許可 */
+            }
+
+            .lobby-container {
+                width: 90%;
+                padding: 20px 15px;
+            }
+
+            .lobby-container h1 {
+                font-size: 1.5em;
+            }
+
+            .game-container {
+                padding: 10px;
+                height: 100%;
+                /* 高さを自動調整 */
+                min-height: 100vh;
+                /* 最低でも画面の高さは確保 */
+            }
+
+            .game-header {
+                flex-direction: column;
+                /* ヘッダー要素を縦積み */
+                gap: 5px;
+                margin-bottom: 5px;
+                text-align: center;
+            }
+
+            .udemy-logo-svg {
+                height: 30px;
+                /* ロゴを少し小さく */
+            }
+
+            a.header-link {
+                font-size: 0.9em;
+            }
+
+            #roomInfo {
+                font-size: 0.9em;
+            }
+
+            .game-board {
+                gap: 10px;
+                /* 各エリア間の隙間を減らす */
+            }
+
+            .main-content-area {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .player-area {
+                padding: 10px;
+            }
+
+            .card {
+                width: 60px;
+                /* カードを小さく */
+                height: 90px;
+                font-size: 1.5em;
+                /* カードの文字サイズ */
+                border-radius: 5px;
+            }
+
+            .cards-container {
+                min-height: 95px;
+                /* カードの高さに合わせる */
+                gap: 5px;
+            }
+
+            .actions-area {
+                padding: 0;
+                gap: 10px;
+                flex: none;
+                /* 高さを自動に */
+            }
+
+            .actions-area button,
+            .actions-area input[type="number"] {
+                font-size: 1.1em;
+                padding: 12px;
+                /* タップしやすく */
+            }
+
+            .ranking-modal {
+                width: 90%;
+                min-width: 0;
+                padding: 20px;
+            }
+
+            .ranking-modal h2 {
+                font-size: 1.5em;
+            }
+
+            .ranking-modal li {
+                font-size: 1em;
+                padding: 10px;
+                flex-direction: column;
+                align-items: center;
+                gap: 5px;
+            }
+
+            #personal-rank-display {
+                font-size: 1.2em;
+            }
+
+            /* UPDATED: スマホではフッターテキストを非表示にする */
+            .footer-text {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -399,8 +546,9 @@
                     </div>
                 </div>
             </main>
-            <p class="footer-text">udemyの動画を見て知識を得て作りました!</p>
+            <p class="footer-text">udemyで作りました！</p>
         </div>
+
         <div id="ranking-modal-overlay" class="modal-overlay" style="display: none;">
             <div class="ranking-modal">
                 <p id="personal-rank-display" style="display: none;"></p>
@@ -467,7 +615,6 @@
         socket.on('errorMsg', (m) => alert(m));
         socket.on('nextRoundCountdown', (data) => { notificationBar.textContent = `次のラウンドまで ${data.seconds}秒...`; });
 
-        // UPDATED: ランキング表示ロジックを変更
         socket.on('finalRanking', (data) => {
             if (!data || !data.top5 || !data.personal) {
                 console.error('受信したランキングデータが不正です:', data);
@@ -475,7 +622,6 @@
             }
             rankingList.innerHTML = '';
 
-            // 常に自分の順位を表示
             personalRankDisplay.textContent = `あなたの順位: ${data.personal.rank}位 (💰 ${data.personal.chips})`;
             personalRankDisplay.style.display = 'block';
 
