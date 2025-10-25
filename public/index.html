@@ -459,10 +459,44 @@
                 flex: none;
             }
 
+            /* UPDATED: ベットエリアをコンパクトに横並びにする */
+            #bettingControls {
+                display: flex;
+                width: 100%;
+                gap: 10px;
+                align-items: center;
+            }
+
+            #bettingControls p {
+                display: none;
+                /* 「ベットしてください」を非表示 */
+            }
+
+            #bettingControls input[type="number"] {
+                width: 60%;
+                /* 幅を100%から変更 */
+                flex-grow: 1;
+                /* スペースを埋める */
+                margin: 0;
+                /* 余白をリセット */
+            }
+
+            #bettingControls button {
+                width: 40%;
+                /* 幅を100%から変更 */
+                flex-shrink: 0;
+                /* 縮まないように */
+                margin: 0;
+                /* 余白をリセット */
+            }
+
+            /* ★ ここまで ★ */
+
             .actions-area button,
             .actions-area input[type="number"] {
                 font-size: 1.1em;
                 padding: 12px;
+                /* width: 100% は他のボタン(hit, stand)やinputのデフォルト */
             }
 
             .ranking-modal {
@@ -596,9 +630,6 @@
         const rankingList = document.getElementById('ranking-list');
         const closeRankingBtn = document.getElementById('closeRankingBtn');
         const personalRankDisplay = document.getElementById('personal-rank-display');
-
-        // UPDATED: 'touchend' イベントリスナーを削除し、'click' のみに統一
-        // e.preventDefault() はダブルタップズームを防ぐために click イベント内で呼び出します。
 
         // --- ロビーボタン ---
         const createRoomHandler = () => {
