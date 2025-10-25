@@ -428,7 +428,6 @@
                 gap: 10px;
             }
 
-            /* UPDATED: 盤面が引き伸ばされるのを防ぎ、コンパクトにする */
             .player-area.self {
                 flex: none;
                 /* 高さを自動に */
@@ -598,69 +597,84 @@
         const closeRankingBtn = document.getElementById('closeRankingBtn');
         const personalRankDisplay = document.getElementById('personal-rank-display');
 
+        // UPDATED: 'touchend' イベントリスナーを削除し、'click' のみに統一
+        // e.preventDefault() はダブルタップズームを防ぐために click イベント内で呼び出します。
+
         // --- ロビーボタン ---
-        const createRoomHandler = (e) => {
-            e.preventDefault(); // ダブルタップズームとゴーストクリックを防止
+        const createRoomHandler = () => {
             const p = playerNameInput.value.trim();
             const r = roomIdInput.value.trim();
             if (p && r) socket.emit('createRoom', { roomId: r, playerName: p });
             else alert('名前とルームIDを入力してください。');
         };
-        createRoomBtn.addEventListener('click', createRoomHandler);
-        createRoomBtn.addEventListener('touchend', createRoomHandler);
-
-        const joinRoomHandler = (e) => {
+        createRoomBtn.addEventListener('click', (e) => {
             e.preventDefault();
+            createRoomHandler();
+        });
+
+        const joinRoomHandler = () => {
             const p = playerNameInput.value.trim();
             const r = roomIdInput.value.trim();
             if (p && r) socket.emit('joinRoom', { roomId: r, playerName: p });
             else alert('名前とルームIDを入力してください。');
         };
-        joinRoomBtn.addEventListener('click', joinRoomHandler);
-        joinRoomBtn.addEventListener('touchend', joinRoomHandler);
+        joinRoomBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            joinRoomHandler();
+        });
 
         // --- ゲーム開始ボタン ---
-        const startGameHandler = (e) => {
-            e.preventDefault();
+        const startGameHandler = () => {
             socket.emit('requestStartGame', currentRoomId);
         };
-        startGameBtn.addEventListener('click', startGameHandler);
-        startGameBtn.addEventListener('touchend', startGameHandler);
+        startGameBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            startGameHandler();
+        });
 
         // --- ベットボタン ---
-        function placeBet(e) {
-            if (e) e.preventDefault();
+        function placeBet() {
             const amount = betAmountInput.value;
             socket.emit('placeBet', { roomId: currentRoomId, amount });
             bettingControls.style.display = 'none';
         }
-        betBtn.addEventListener('click', placeBet);
-        betBtn.addEventListener('touchend', placeBet);
-        betAmountInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') placeBet(); }); // Enterキー操作はPC用に残す
+        betBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            placeBet();
+        });
+        betAmountInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // フォームの送信を防ぐ
+                placeBet();
+            }
+        });
 
         // --- ヒットボタン ---
-        const hitHandler = (e) => {
-            e.preventDefault();
+        const hitHandler = () => {
             socket.emit('hit', currentRoomId);
         };
-        hitBtn.addEventListener('click', hitHandler);
-        hitBtn.addEventListener('touchend', hitHandler);
+        hitBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            hitHandler();
+        });
 
         // --- スタンドボタン ---
-        const standHandler = (e) => {
-            e.preventDefault();
+        const standHandler = () => {
             socket.emit('stand', currentRoomId);
         };
-        standBtn.addEventListener('click', standHandler);
-        standBtn.addEventListener('touchend', standHandler);
+        standBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            standHandler();
+        });
 
         // --- ランキングを閉じるボタン ---
-        const closeRankingHandler = (e) => {
-            e.preventDefault();
+        const closeRankingHandler = () => {
             window.location.reload();
         };
-        closeRankingBtn.addEventListener('click', closeRankingHandler);
-        closeRankingBtn.addEventListener('touchend', closeRankingHandler);
+        closeRankingBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeRankingHandler();
+        });
 
         // --------------------------------------------------
 
